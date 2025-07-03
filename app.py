@@ -83,24 +83,53 @@ def process_resume_and_jd(resume_text, jd_text):
     projects = project_extraction.extract_projects(resume_text)
     print(f"Type of projects: {type(projects)}")
 
-    project_names = [p["name"] for p in projects]
+    # 👉 Collect all skills found inside projects
+    project_skills = []
+    for p in projects:
+        project_skills.extend(p["skills"])
+    project_skills = list(set(project_skills))
+    print(f"✅ Skills found in projects: {project_skills}")
 
-    resume_skills = skill_extraction.extract_all_skills(resume_text, project_names)
-    print(f"✅ Resume skills: {resume_skills}")
+    # 👉 Extract direct resume skills too
+    resume_skills = skill_extraction.extract_all_skills(resume_text)
+    print(f"✅ Resume skills (direct): {resume_skills}")
 
-    # ✅ NEW SAFE FALLBACK!
+    # 👉 Merge all for fair matching
+    all_resume_skills = list(set(resume_skills + project_skills))
+    print(f"✅ Merged resume skills (text + projects): {all_resume_skills}")
+
+    # 👉 JD skills extraction
     jd_skills = skill_extraction.extract_jd_skills(jd_text)
     if not jd_skills:
-        print("⚠️ No JD skills found with extract_jd_skills, using fallback extractor...")
+        print("⚠️ No JD skills found with extract_jd_skills, fallback to simple extractor...")
         jd_skills = skill_extraction.extract_skills(jd_text)
     print(f"✅ Final JD skills: {jd_skills}")
 
-    skill_comparison = skill_extraction.compare_skills(resume_skills, jd_skills)
+    # 👉 Compare
+    skill_comparison = skill_extraction.compare_skills(all_resume_skills, jd_skills)
     print(f"✅ Skill comparison: {skill_comparison}")
+
+    # ✅ REQUIRED: Add jd_skills + raw_resume_text to skill_comparison for final scoring
+    skill_comparison["jd_skills"] = jd_skills
+    skill_comparison["raw_resume_text"] = resume_text  # for experience + soft skills detection
 
     score = scoring.calculate_score(skill_comparison, projects, jd_text)
     feedback = scoring.generate_feedback(score, skill_comparison["missing_skills"])
     project_feedback = project_extraction.evaluate_projects_against_jd(projects, jd_text)
+
+    experience = "experience" in resume_text.lower()
+    has_internship_or_achievements = any(
+        word in resume_text.lower() for word in ["internship", "leetcode", "kaggle"]
+    )
+
+    # ✅ Pass them to scoring
+    score = scoring.calculate_score(
+        skill_comparison,
+        projects,
+        jd_text,
+        experience=experience,
+        has_internship_or_achievements=has_internship_or_achievements
+    )
 
     return {
         "resume_info": resume_info,
@@ -111,6 +140,8 @@ def process_resume_and_jd(resume_text, jd_text):
         "feedback": feedback,
         "project_feedback": project_feedback
     }
+
+
 
 
 
